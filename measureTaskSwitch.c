@@ -56,7 +56,7 @@ struct sched_attr {
     uint32_t sched_util_max;
 };
 
-void setAttrForDeadline(struct sched_attr* attr)
+int setAttrForDeadline(struct sched_attr* attr)
 {
     memset(attr, 0, sizeof(struct sched_attr));
     attr->size = sizeof(struct sched_attr);
@@ -64,32 +64,28 @@ void setAttrForDeadline(struct sched_attr* attr)
     attr->sched_runtime = 30000000; // 30msec
     attr->sched_deadline = 30000000; // 30msec
     attr->sched_period = 30000000; // 30msec
+
+    if (syscall(__NR_sched_setattr, 0, attr, 0)) {
+        perror("setAttrForDeadline()");
+        return -1;
+    }
+    return 0;
 }
 
-void setAttrForOther(struct sched_attr* attr)
+int setScheduler(struct sched_param *param, int policy)
 {
-    memset(attr, 0, sizeof(struct sched_attr));
-    attr->size = sizeof(struct sched_attr);
-    attr->sched_policy = SCHED_OTHER;
-    //    attr->sched_nice = -20; // Highest
-    attr->sched_nice = 0;
+    memset(param, 0, sizeof(struct sched_param));
+
+    if (policy != SCHED_OTHER) {
+        param->sched_priority = sched_get_priority_max(policy);
+    }
+    if (sched_setscheduler(0, policy, param)) {
+        perror("setScheduler()");
+        return -1;
+    }
+    return 0;
 }
 
-void setAttrForFifo(struct sched_attr* attr)
-{
-    memset(attr, 0, sizeof(struct sched_attr));
-    attr->size = sizeof(struct sched_attr);
-    attr->sched_policy = SCHED_FIFO;
-    attr->sched_priority = sched_get_priority_max(SCHED_FIFO);
-}
-
-void setAttrForRoundRobin(struct sched_attr* attr)
-{
-    memset(attr, 0, sizeof(struct sched_attr));
-    attr->size = sizeof(struct sched_attr);
-    attr->sched_policy = SCHED_RR;
-    attr->sched_priority = sched_get_priority_max(SCHED_RR);
-}
 
 void usagePrint(char* name)
 {
@@ -121,9 +117,11 @@ void dummyLoad(void)
 int main(int ac, char* av[])
 {
     struct sched_attr attr;
+    struct sched_param param;
     int i;
 
     int mode = 0; // SCHED_DEADLINE
+    int policy = SCHED_DEADLINE;
     char schedPolicy[100];
     strcpy(schedPolicy, "SCHED_DEADLINE");
     
@@ -136,37 +134,32 @@ int main(int ac, char* av[])
             strcpy(schedPolicy, "SCHED_DEADLINE");
         } else if (strcmp(av[1], "-o") == 0) {
             mode = 1; // SCHED_OTHER
+            policy = SCHED_OTHER;
             strcpy(schedPolicy, "SCHED_OTHER");
         } else if (strcmp(av[1], "-f") == 0) {
             mode = 2; // SCHED_FIFO
+            policy = SCHED_FIFO;
             strcpy(schedPolicy, "SCHED_FIFO");
         } else if (strcmp(av[1], "-r") == 0) {
             mode = 3; // SCHED_RR
+            policy = SCHED_RR;
             strcpy(schedPolicy, "SCHED_RR");
         } else {
             usagePrint(av[0]);
             return -1;
         }
     }
+    int ret = 0;
     switch (mode) {
         case 0:
-            setAttrForDeadline(&attr);
+            ret = setAttrForDeadline(&attr);
             break;
-        case 1:
-            setAttrForOther(&attr);
-            break;
-        case 2:
-            setAttrForFifo(&attr);
-            break;
-        case 3:
-            setAttrForRoundRobin(&attr);
+        default:
+            ret = setScheduler(&param, policy);
             break;
     }
-    
-    if (syscall(__NR_sched_setattr, 0, &attr, 0)) {
-        int errnum = errno;
-        char* errstr = strerror(errnum);
-        printf("Error:sched_setattr():errno=%d,errstr=%s\n", errnum, errstr);
+    if (ret) {
+        printf("setAttr() or setScheduler() failed\n");
         return -1;
     }
 
