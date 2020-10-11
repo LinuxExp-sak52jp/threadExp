@@ -9,7 +9,7 @@ else
 endif
 LDFLAGS =
 
-TARGETS = MeasureTsw MeasureGettime
+TARGETS = MeasureTsw MeasureGettime RwIo
 
 
 all: $(TARGETS)
@@ -20,14 +20,17 @@ MeasureTsw: measureTaskSwitch.o calcDiffs.o
 MeasureGettime: measureGettime.o calcDiffs.o
 	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
 
+RwIo: rwIO.o
+	$(CC) $(CFLAGS) -o $@ $^ $(LDFLAGS)
+
 %.o: %.c
 	$(CC) $(CPPFLAGS) $(CFLAGS) -c -o $@ $<
 
 clean:
-	rm -rf $(TARGETS) *.o *~
+	rm -rf $(TARGETS) *.o *~ .*~
 
 realclean:
-	rm -rf $(TARGETS) *.o *~ *.d
+	rm -rf $(TARGETS) *.o *~ *.d .*~
 
 .PHONY: clean realclean all
 
