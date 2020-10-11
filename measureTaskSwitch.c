@@ -17,15 +17,25 @@
 #include <time.h>
 #include <sched.h>
 #include <sys/time.h>
-#include <sys/syscall.h>
 #include <errno.h>
 #include <string.h>
 #include <stdint.h>
 #include <sys/types.h>
 #include <asm/types.h>
+#include <time.h>
 #include <unistd.h>
+#include <sys/syscall.h>
 
+#include "calcDiffs.h"
+
+#ifdef SCHED_DEADLINE
+#  undef SCHED_DEADLINE
+#endif // SCHED_DEADLINE
 #define SCHED_DEADLINE  (6)
+
+
+//! 繰り返し回数
+#define NUM_OF_REPEATS (1000)
 
 struct sched_attr {
     uint32_t size;              /* この構造体のサイズ */
@@ -43,34 +53,6 @@ struct sched_attr {
     uint32_t sched_util_min;
     uint32_t sched_util_max;
 };
-
-void calcDiffs(struct timeval* tv, int size)
-{
-    long long *diffs = (long long*)malloc(size * sizeof(long long));
-    long long maxv = 0;
-    long long minv = 1000000000;
-    long long sum = 0;
-    int i;
-    for (i = 0; i < size; i++) {
-        long long sec = tv[i+1].tv_sec - tv[i].tv_sec;
-        long long usec = tv[i+1].tv_usec - tv[i].tv_usec;
-        if (usec >= 0) {
-            diffs[i] = sec*1000000 + usec;
-        } else {
-            diffs[i] = (sec-1)*1000000 + (1000000+usec);
-        }
-        if (maxv < diffs[i])
-            maxv = diffs[i];
-        if (minv > diffs[i])
-            minv = diffs[i];
-        sum += diffs[i];
-    }
-
-    double ave = (double)sum/size;
-    printf("ave = %lf [us]\n", ave);
-    printf("max = %lld [us]\n", maxv);
-    printf("min = %lld [us]\n", minv);
-}
 
 void setAttrForDeadline(struct sched_attr* attr)
 {
@@ -169,7 +151,7 @@ int main(int ac, char* av[])
         return -1;
     }
 
-    struct timeval tv[101];
+    struct timeval tv[NUM_OF_REPEATS+1];
     const struct timespec sp = {
         .tv_sec = 0,
         .tv_nsec = 30000000, // 30 msec
