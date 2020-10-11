@@ -25,6 +25,8 @@
 #include <time.h>
 #include <unistd.h>
 #include <sys/syscall.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 
 #include "calcDiffs.h"
 
@@ -69,7 +71,8 @@ void setAttrForOther(struct sched_attr* attr)
     memset(attr, 0, sizeof(struct sched_attr));
     attr->size = sizeof(struct sched_attr);
     attr->sched_policy = SCHED_OTHER;
-    attr->sched_nice = -20; // Highest
+    //    attr->sched_nice = -20; // Highest
+    attr->sched_nice = 0;
 }
 
 void setAttrForFifo(struct sched_attr* attr)
@@ -97,6 +100,22 @@ void usagePrint(char* name)
     fprintf(stderr, "  -r:SCHED_RR\n");
     fprintf(stderr, "  -o:SCHED_OTHER\n");
     fprintf(stderr, "  (default:SCHED_DEADLINE)\n");
+}
+
+void dummyLoad(void)
+{
+    volatile int d;
+    int fd = open("/dev/null", O_WRONLY|O_SYNC);
+    if (fd < 0) {
+        perror("dummyLoad()");
+        exit(EXIT_FAILURE);
+    }
+
+    for (int i = 0; i < 500000; i++) {
+        d = i;
+        write(fd, (void *)&d, sizeof(d));
+    }
+    
 }
 
 int main(int ac, char* av[])
@@ -158,6 +177,7 @@ int main(int ac, char* av[])
     };
     for (i = 0; i < sizeof(tv)/sizeof(struct timeval); i++) {
         gettimeofday(&tv[i], NULL);
+        dummyLoad();
         nanosleep(&sp, NULL);
     }
 
